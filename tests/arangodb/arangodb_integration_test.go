@@ -50,13 +50,14 @@ const (
 
 func arangoBaseURL(t *testing.T) string {
 	t.Helper()
-	switch "" {
-	case ArangoDBHost:
+	if ArangoDBHost == "" {
 		t.Fatal("'ARANGODB_HOST' not set")
-	case ArangoDBPort:
-		t.Fatal("'ARANGODB_PORT' not set")
 	}
-	return fmt.Sprintf("http://%s:%s", ArangoDBHost, ArangoDBPort)
+	port := ArangoDBPort
+	if port == "" {
+		port = "8529"
+	}
+	return fmt.Sprintf("http://%s:%s", ArangoDBHost, port)
 }
 
 func getArangoDBVars(t *testing.T) map[string]any {
