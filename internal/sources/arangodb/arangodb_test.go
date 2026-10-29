@@ -217,6 +217,90 @@ func TestRunAQLPreservesJSONNumbers(t *testing.T) {
 	}
 }
 
+func TestRunAQLCursorContinuation(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		failNext bool
+	}{
+		{name: "reads all batches"},
+		{name: "cleans up after continuation failure", failNext: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			const cursorPath = "/_db/test/_api/cursor"
+			requests := make(chan string, 16)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				request := r.Method + " " + r.URL.Path
+				select {
+				case requests <- request:
+				default:
+					t.Error("too many cursor requests")
+					http.Error(w, "too many requests", http.StatusBadRequest)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				switch request {
+				case "POST " + cursorPath:
+					w.WriteHeader(http.StatusCreated)
+					_, _ = w.Write([]byte(`{"id":"123","result":[1,{"name":"first batch"}],"hasMore":true,"error":false,"code":201}`))
+				case "POST " + cursorPath + "/123":
+					if tc.failNext {
+						w.WriteHeader(http.StatusBadRequest)
+						_, _ = w.Write([]byte(`{"error":true,"code":400,"errorNum":10,"errorMessage":"continuation failed"}`))
+						return
+					}
+					// Exhausting the cursor releases it on the server; the last
+					// batch has no ID and needs no explicit DELETE.
+					_, _ = w.Write([]byte(`{"result":[9007199254740993,null],"hasMore":false,"error":false,"code":200}`))
+				case "DELETE " + cursorPath + "/123":
+					w.WriteHeader(http.StatusAccepted)
+					_, _ = w.Write([]byte(`{"error":false,"code":202}`))
+				default:
+					t.Errorf("unexpected request: %s", request)
+					http.Error(w, "unexpected request", http.StatusBadRequest)
+				}
+			}))
+			t.Cleanup(server.Close)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			t.Cleanup(cancel)
+			conn := connection.NewHttpConnection(connection.HttpConfiguration{
+				Endpoint: connection.NewRoundRobinEndpoints([]string{server.URL}),
+			})
+			db, err := adb.NewClient(conn).GetDatabase(ctx, "test", &adb.GetDatabaseOptions{SkipExistCheck: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := (&Source{Database: db}).RunAQL(ctx, "FOR value IN [1, 2, 3, 4] RETURN value", nil)
+			if tc.failNext {
+				if err == nil || !strings.Contains(err.Error(), "unable to read AQL cursor") || got != nil {
+					t.Fatalf("RunAQL() = %v, %v; want read error and no partial results", got, err)
+				}
+			} else {
+				if err != nil {
+					t.Fatal(err)
+				}
+				encoded, err := json.Marshal(got)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if want := `[1,{"name":"first batch"},9007199254740993,null]`; string(encoded) != want {
+					t.Fatalf("serialized rows = %s, want %s", encoded, want)
+				}
+			}
+			wantRequests := []string{"POST " + cursorPath, "POST " + cursorPath + "/123"}
+			if tc.failNext {
+				wantRequests = append(wantRequests, "DELETE "+cursorPath+"/123")
+			}
+			var gotRequests []string
+			for len(requests) > 0 {
+				gotRequests = append(gotRequests, <-requests)
+			}
+			if diff := cmp.Diff(wantRequests, gotRequests); diff != "" {
+				t.Fatalf("cursor requests mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestRunAQLClosesCursorAfterCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
