@@ -22,6 +22,7 @@ import (
 )
 
 var expectedToolSources = []string{
+	"arangodb",
 	"alloydb-omni",
 	"alloydb-postgres-admin",
 	"alloydb-postgres-observability",
@@ -112,6 +113,7 @@ func TestLoadPrebuiltToolYAMLs(t *testing.T) {
 }
 
 func TestGetPrebuiltTool(t *testing.T) {
+	arangodb_config := getOrFatal(t, "arangodb")
 	alloydb_omni_config := getOrFatal(t, "alloydb-omni")
 	alloydb_admin_config := getOrFatal(t, "alloydb-postgres-admin")
 	alloydb_observability_config := getOrFatal(t, "alloydb-postgres-observability")
@@ -149,6 +151,9 @@ func TestGetPrebuiltTool(t *testing.T) {
 	healthcare_config := getOrFatal(t, "cloud-healthcare")
 	cloudstorage_config := getOrFatal(t, "cloud-storage")
 	snowflake_config := getOrFatal(t, "snowflake")
+	if len(arangodb_config) <= 0 {
+		t.Fatalf("unexpected error: could not fetch arangodb prebuilt tools yaml")
+	}
 	if len(alloydb_omni_config) <= 0 {
 		t.Fatalf("unexpected error: could not fetch alloydb omni prebuilt tools yaml")
 	}

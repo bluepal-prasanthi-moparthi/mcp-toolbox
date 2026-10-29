@@ -1898,6 +1898,7 @@ func TestPrebuiltTools(t *testing.T) {
 	mindsdb_config, _ := prebuiltconfigs.Get("mindsdb")
 	mssql_config, _ := prebuiltconfigs.Get("mssql")
 	mysql_config, _ := prebuiltconfigs.Get("mysql")
+	arangodb_config, _ := prebuiltconfigs.Get("arangodb")
 	neo4jconfig, _ := prebuiltconfigs.Get("neo4j")
 	oceanbase_config, _ := prebuiltconfigs.Get("oceanbase")
 	oracle_config, _ := prebuiltconfigs.Get("oracledb")
@@ -2012,6 +2013,12 @@ func TestPrebuiltTools(t *testing.T) {
 	t.Setenv("LOOKER_LOCATION", "us")
 
 	t.Setenv("SQLITE_DATABASE", "test.db")
+
+	t.Setenv("ARANGODB_HOST", "127.0.0.1")
+	t.Setenv("ARANGODB_PORT", "8529")
+	t.Setenv("ARANGODB_DATABASE", "toolbox")
+	t.Setenv("ARANGODB_USER", "your_arangodb_user")
+	t.Setenv("ARANGODB_PASSWORD", "your_arangodb_password")
 
 	t.Setenv("NEO4J_URI", "bolt://localhost:7687")
 	t.Setenv("NEO4J_DATABASE", "neo4j")
@@ -2511,6 +2518,16 @@ func TestPrebuiltTools(t *testing.T) {
 				"sqlite_database_tools": group.GroupConfig{
 					Name:      "sqlite_database_tools",
 					ToolNames: []string{"execute_sql", "list_tables"},
+				},
+			},
+		},
+		{
+			name: "arangodb prebuilt tools",
+			in:   arangodb_config,
+			wantGroups: server.GroupConfigs{
+				"arangodb_database_tools": group.GroupConfig{
+					Name:      "arangodb_database_tools",
+					ToolNames: []string{"execute_aql"},
 				},
 			},
 		},

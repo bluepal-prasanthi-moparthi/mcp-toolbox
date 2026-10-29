@@ -22,6 +22,9 @@ node_modules
 # python
 __pycache__/
 
+# local go build cache
+.gotmp/
+
 # executable
 mcp-toolbox
 toolbox
